@@ -59,33 +59,12 @@ class Viewer:
         root.option_add("*Font", self.ui)
         root.state("zoomed")
         root.update_idletasks()
-        # Keep the Windows sizing frame and taskbar identity, and draw the caption in Tk.
-        user32 = ctypes.windll.user32
-        hwnd = user32.GetParent(root.winfo_id())
-        flags = user32.GetWindowLongW(hwnd, -16)
-        user32.SetWindowLongW(hwnd, -16, flags & ~0x00C00000)  # WS_CAPTION
-        user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 0x37)  # apply frame change
-        def maximize():
-            root.state("normal" if root.state() == "zoomed" else "zoomed")
-        drag_origin = None
+        # Keep the caption and sizing frame together so Windows handles snap,
+        # cross-monitor dragging, and the minimize/restore transition.
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+        dark = ctypes.c_int(1)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(dark), ctypes.sizeof(dark))
 
-        def arm_drag(event):
-            nonlocal drag_origin
-            drag_origin = (event.x_root, event.y_root)
-
-        def move_window(event):
-            nonlocal drag_origin
-            if drag_origin is None:
-                return
-            x, y = drag_origin
-            if abs(event.x_root - x) < 4 and abs(event.y_root - y) < 4:
-                return
-            drag_origin = None
-            # Return to Tk before Windows enters its modal move loop.
-            # SendMessage here can re-enter Tk inside the Python motion callback.
-            user32.ReleaseCapture()
-            position = (event.x_root & 0xffff) | ((event.y_root & 0xffff) << 16)
-            user32.PostMessageW(hwnd, 0x00A1, 2, position)  # WM_NCLBUTTONDOWN, HTCAPTION
         def label(parent, text, command=None, **opts):
             widget = tk.Label(parent, text=text, bg=opts.pop("bg", SIDE), fg=opts.pop("fg", FG),
                               font=opts.pop("font", self.ui), bd=0, **opts)
@@ -95,25 +74,13 @@ class Viewer:
             return widget
         self.status = label(root, "", anchor="e", padx=14)
         self.status.pack(side="bottom", fill="x", ipady=3)
-        bar = tk.Frame(root, bg=SIDE, height=43)
+        bar = tk.Frame(root, bg=SIDE, height=32)
         bar.pack(fill="x")
         bar.pack_propagate(False)
         tk.Frame(root, bg="#2b2b2b", height=1).pack(fill="x")
         with Image.open(Path(__file__).with_name("mervive-code-sharp.ico")) as artwork:
             self.brand = ImageTk.PhotoImage(artwork.ico.getimage((20, 20)))
         label(bar, "", self.choose_file, image=self.brand).pack(side="left", fill="y", padx=12)
-        for glyph, command in [("×",self.quit_editor), ("□",maximize), ("−",root.iconify)]:
-            button = tk.Button(bar, text=glyph, command=command, width=4, bd=0, relief="flat",
-                               bg=SIDE, fg=FG, activebackground="#343434", activeforeground="white",
-                               font=("Segoe UI", -17), highlightthickness=0)
-            button.pack(side="right", fill="y")
-        self.caption = label(bar, "", anchor="center")
-        self.caption.place(relx=.5, rely=.5, anchor="center")
-        for surface in (bar, self.caption):
-            surface.bind("<ButtonPress-1>", arm_drag)
-            surface.bind("<Double-Button-1>", lambda _: maximize())
-            surface.bind("<B1-Motion>", move_window)
-
         for title, actions in [
             ("File", [("Open File…", self.choose_file), ("Open Folder…", self.choose_folder), ("Save", self.save), ("Close File", self.close_file)]),
             ("Edit", [("Undo", lambda: self.history("undo")), ("Redo", lambda: self.history("redo")), ("Cut", lambda: self.code.event_generate("<<Cut>>")), ("Paste", lambda: self.code.event_generate("<<Paste>>")), ("Copy", lambda: self.code.event_generate("<<Copy>>")), ("Find…", self.open_find)]),
@@ -444,7 +411,6 @@ class Viewer:
         self.welcome.pack(fill="both",expand=True)
         self.status.config(text="")
         self.root.title(f"{self.folder.name} — Mervive Code")
-        self.caption.config(text=self.root.title())
 
     def map_click(self,event):
         if self.map_lines:
@@ -650,7 +616,6 @@ class Viewer:
             self.files.selection_set(str(path))
             self.files.focus(str(path))
         self.root.title(f"{self.folder.name} — Mervive Code — {path.name}")
-        self.caption.config(text=self.root.title())
 
     def show_image(self,path):
         try:
