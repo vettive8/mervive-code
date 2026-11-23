@@ -4,7 +4,7 @@ Mervive Code is a lightweight Windows editor for context engineering with Codex 
 
 For example, keep a lesson outline, transcript and PDF worksheet together. Arrange them in reading order, ask your AI app to update the outline, then press **F5** to read the changes. The PDF reader loads nearby pages as you scroll.
 
-**Drag to move · Ctrl + drop to copy.** Drag a file or folder from Windows File Explorer onto a folder in Mervive. Hold **Ctrl while dropping** to keep the original. Dropping onto a file uses its containing folder. Existing names are skipped.
+**Drag to move · Ctrl + drop to copy.** Drag a file or folder onto the middle of a destination folder in Mervive, either from its own Explorer or from Windows File Explorer. Drop on the project heading to move an item back to the root. Hold **Ctrl while dropping** to keep the original. Dropping onto a file uses its containing folder. Existing names are skipped.
 
 [Resources · v1 source lines, RAM, CPU and editor benchmarks](RESOURCES.md)
 
@@ -36,7 +36,7 @@ Click an Explorer row and press **Delete** to move the selected file or folder t
 
 ## Explorer views
 
-Choose **Order** or **Alphabetical** from the Explorer's **…** menu. In Order, drag a row to the blue line to place it above or below another item in the same folder. Files and folders can be mixed. Newly discovered entries appear at the end.
+Choose **Order** or **Alphabetical** from the Explorer's **…** menu. In Order, drop at the upper or lower edge of a sibling row to reorder at the blue line. The middle of a folder row accepts a move into that folder in either view. Files and folders can be mixed. Newly discovered entries appear at the end.
 
 The project keeps its view and sequences in `.mervive-order.json`. Each key in `folders` is a relative directory path (`.` for the project root). Its value lists the child names in reading order. An agent can edit this file and you can press **F5** to apply the changes. Switching to Alphabetical preserves your saved order.
 

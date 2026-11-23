@@ -133,6 +133,9 @@ def configure_window_frame(root):
     controls.SetWindowSubclass.argtypes = [wintypes.HWND, callback, word, word]
     controls.RemoveWindowSubclass.argtypes = [wintypes.HWND, callback, word]
     drag = None
+    user.FillRect.argtypes = [wintypes.HDC, ctypes.POINTER(wintypes.RECT), wintypes.HBRUSH]
+    ctypes.windll.gdi32.CreateSolidBrush.restype = wintypes.HBRUSH
+    ctypes.windll.gdi32.DeleteObject.argtypes = [wintypes.HANDLE]
     brush = ctypes.windll.gdi32.CreateSolidBrush(0x1f1f1f)
 
     @callback
@@ -657,9 +660,35 @@ class Viewer:
     def start_reorder(self, event):
         self.drag_active = False
         row = self.files.identify_row(event.y)
-        self.drag_start = (row, event.x, event.y) if row and self.order_view.get() == "Order" else None
+        self.drag_start = (row, event.x, event.y) if row and not self.transfer_job else None
+
+    def internal_destination(self, event):
+        source = Path(self.drag_start[0])
+        widget = self.root.winfo_containing(event.x_root, event.y_root)
+        if widget == self.folder_label:
+            destination = self.folder
+        elif (0 <= event.x < self.files.winfo_width()
+              and 0 <= event.y < self.files.winfo_height()):
+            row = self.files.identify_row(event.y)
+            if not row:
+                destination = self.folder
+            elif self.files.tag_has("directory", row):
+                _, y, _, height = self.files.bbox(row)
+                if (self.order_view.get() == "Order" and Path(row).parent == source.parent
+                        and not y + height / 4 <= event.y < y + 3 * height / 4):
+                    return None  # Upper and lower edges reorder siblings.
+                destination = Path(row)
+            else:
+                destination = Path(row).parent
+        else:
+            return None
+        if destination == source.parent or destination.is_relative_to(source):
+            return None
+        return destination
 
     def drop_target(self, event):
+        if self.order_view.get() != "Order":
+            return None
         source = self.drag_start[0]
         target = self.files.identify_row(event.y)
         if (not target or source == target or not self.files.exists(source)
@@ -679,7 +708,10 @@ class Viewer:
         self.drag_active = True
         if event.y < 15 or event.y > self.files.winfo_height() - 15:
             self.files.yview_scroll(-1 if event.y < 15 else 1, "units")
-        target = self.drop_target(event)
+        destination = self.internal_destination(event)
+        action = COPY if event.state & 0x4 else MOVE
+        self.notice.config(text=f"{action.capitalize()} to {destination.name}" if destination else "", fg=FG)
+        target = None if destination else self.drop_target(event)
         if target:
             self.drop_line.place(x=0, y=target[2]-1, relwidth=1)
         else:
@@ -690,6 +722,12 @@ class Viewer:
         try:
             if not self.drag_active or not self.drag_start:
                 return self.open_selected(event)
+            destination = self.internal_destination(event)
+            if destination:
+                source = Path(self.drag_start[0])
+                self.start_transfer(destination, [source], COPY if event.state & 0x4 else MOVE, internal=True)
+                return "break"
+            self.notice.config(text="")
             target = self.drop_target(event)
             if target:
                 source = self.drag_start[0]
@@ -908,10 +946,16 @@ class Viewer:
         if action == REFUSE_DROP:
             return REFUSE_DROP
         folder = self.external_destination(event)
-        project = self.folder
         sources = [Path(name) for name in self.root.tk.splitlist(event.data)]
         if not sources:
             return REFUSE_DROP
+        self.start_transfer(folder, sources, action)
+        # The worker owns source removal. Never signal a source-side delete,
+        # especially when a multi-item drop might partially fail.
+        return COPY if action == COPY else REFUSE_DROP
+
+    def start_transfer(self, folder, sources, action, internal=False):
+        project = self.folder
         worker = ThreadPoolExecutor(max_workers=1)
         job = worker.submit(transfer_dropped_items, project, folder, sources, action)
         worker.shutdown(wait=False)
@@ -926,6 +970,8 @@ class Viewer:
             self.transfer_job = None
             transferred, skipped = job.result()
             if transferred and self.folder == project:
+                if internal:
+                    self.follow_internal_transfer(sources[0], transferred[0], action)
                 self.refresh_workspace()
                 if folder != project and self.files.exists(str(folder)):
                     self.set_branch(str(folder), True)
@@ -938,9 +984,39 @@ class Viewer:
             if skipped:
                 messagebox.showwarning("Skipped items", "\n".join(skipped), parent=self.root)
         self.root.after(50, finish)
-        # The worker owns source removal. Never signal a source-side delete,
-        # especially when a multi-item drop might partially fail.
-        return COPY if action == COPY else REFUSE_DROP
+
+    def follow_internal_transfer(self, source, target, action):
+        if action == MOVE and self.path and self.path.is_relative_to(source):
+            previous = self.path
+            self.path = target / previous.relative_to(source)
+            if getattr(self, "buffer_path", None) == previous:
+                self.buffer_path = self.path
+            if self.pdf.path == previous:
+                self.pdf.path = self.path
+            self.display_header(self.path)
+            if self.editable and self.code.get("1.0", "end-1c") != self.original:
+                self.tabname.config(text=self.path.name + " •")
+
+        # Keep each nested folder's custom sequence at its new relative path.
+        try:
+            self.order = explorer_order.read_order(self.folder)
+        except (OSError, ValueError) as exc:
+            self.refresh_feedback(str(exc))
+            return
+        old = source.relative_to(self.folder)
+        new = target.relative_to(self.folder)
+        folders = dict(self.order["folders"])
+        for key, names in self.order["folders"].items():
+            directory = Path(key)
+            if directory.is_relative_to(old):
+                folders[(new / directory.relative_to(old)).as_posix()] = names
+                if action == MOVE:
+                    folders.pop(key, None)
+        parent = old.parent.as_posix()
+        if action == MOVE and old.name in folders.get(parent, []):
+            folders[parent] = [n for n in folders[parent] if n != old.name]
+        if folders != self.order["folders"]:
+            self.save_order(folders=folders)
 
     def explorer_menu(self, event):
         node = self.files.identify_row(event.y)
