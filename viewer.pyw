@@ -596,6 +596,10 @@ class Viewer:
         expanded = sorted((node for node in self.loaded_folders if self.files.item(node, "open")),
                           key=lambda node: len(Path(node).parts)) if path == self.folder else []
         self.folder = path
+        title = f"{path.name or path} — Mervive Code"
+        if self.path:
+            title += f" — {self.path.name}"
+        self.root.title(title)
         self.folder_label.config(text=path.name or str(path))
         self.set_folder_expanded(True)
         self.files.delete(*self.files.get_children())
