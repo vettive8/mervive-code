@@ -1,5 +1,8 @@
 from pathlib import Path
 from pdf_preview import PdfPreview
+from explorer_drop import copy_dropped_items
+from concurrent.futures import ThreadPoolExecutor
+from tkinterdnd2 import TkinterDnD, DND_FILES, COPY, REFUSE_DROP
 import explorer_order
 import sys
 import ctypes
@@ -329,6 +332,15 @@ class Viewer:
         self.files.bind("<Double-Button-1>", lambda _: "break")
         self.files.bind("<Left>", self.tree_arrow)
         self.files.bind("<Right>", self.tree_arrow)
+        self.copy_job = None
+        self.drop_hover = None
+        if isinstance(root, TkinterDnD.Tk):
+            for surface in (self.folder_label, self.files):
+                surface.drop_target_register(DND_FILES)
+                surface.dnd_bind("<<DropEnter>>", self.external_drag)
+                surface.dnd_bind("<<DropPosition>>", self.external_drag)
+                surface.dnd_bind("<<DropLeave>>", self.leave_external_drag)
+                surface.dnd_bind("<<Drop>>", self.external_drop)
         self.loaded_folders = set()
         self.work=tk.Frame(self.pane,bg=BG)
         self.pane.add(self.work,stretch="always")
@@ -517,6 +529,9 @@ class Viewer:
         return answer is False or (answer is True and self.save())
 
     def quit_editor(self):
+        if self.copy_job:
+            self.refresh_feedback("Copy in progress. Close after it finishes.")
+            return
         if self.can_leave():
             remember_folder(self.folder)
             self.root.destroy()
@@ -853,6 +868,67 @@ class Viewer:
             row.paste(glyph, (46 - glyph.width // 2, 14 - glyph.height // 2))
         return ImageTk.PhotoImage(row)
 
+    def external_destination(self, event):
+        if event.widget == self.files:
+            row = self.files.identify_row(event.y_root - self.files.winfo_rooty())
+            if row:
+                return Path(row) if self.files.tag_has("directory", row) else Path(row).parent
+        return self.folder
+
+    def external_drag(self, event):
+        if self.copy_job or COPY not in event.actions:
+            return REFUSE_DROP
+        folder = self.external_destination(event)
+        if folder != self.drop_hover:
+            self.drop_hover = folder
+            if self.notice_timer:
+                self.root.after_cancel(self.notice_timer)
+                self.notice_timer = None
+            self.notice.config(text=f"Copy to {folder.name}", fg=FG)
+        return COPY
+
+    def leave_external_drag(self, event):
+        if self.drop_hover is not None:
+            self.drop_hover = None
+            self.notice.config(text="")
+        return COPY
+
+    def external_drop(self, event):
+        self.leave_external_drag(event)
+        if self.copy_job or COPY not in event.actions:
+            return REFUSE_DROP
+        folder = self.external_destination(event)
+        project = self.folder
+        sources = [Path(name) for name in self.root.tk.splitlist(event.data)]
+        if not sources:
+            return REFUSE_DROP
+        worker = ThreadPoolExecutor(max_workers=1)
+        job = worker.submit(copy_dropped_items, project, folder, sources)
+        worker.shutdown(wait=False)
+        self.copy_job = job
+        self.notice.config(text=f"Copying to {folder.name}…", fg=FG)
+
+        def finish():
+            if not job.done():
+                self.root.after(100, finish)
+                return
+            self.copy_job = None
+            copied, skipped = job.result()
+            if copied and self.folder == project:
+                self.refresh_workspace()
+                if folder != project and self.files.exists(str(folder)):
+                    self.set_branch(str(folder), True)
+                row = str(copied[0])
+                if self.files.exists(row):
+                    self.files.selection_set(row)
+                    self.files.focus(row)
+                    self.files.see(row)
+            self.refresh_feedback(f"Copied {len(copied)} to {folder.name}")
+            if skipped:
+                messagebox.showwarning("Skipped items", "\n".join(skipped), parent=self.root)
+        self.root.after(50, finish)
+        return COPY
+
     def explorer_menu(self, event):
         node = self.files.identify_row(event.y)
         if not node:
@@ -1118,7 +1194,7 @@ if __name__ == "__main__":
     except AttributeError:
         ctypes.windll.user32.SetProcessDPIAware()
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Mervive.Code.Viewer")
-    root = tk.Tk()
+    root = TkinterDnD.Tk()
     root.iconbitmap(default=str(Path(__file__).with_name("mervive-code-sharp.ico")))
     app = Viewer(root)
     path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else startup_folder()

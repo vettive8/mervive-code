@@ -37,7 +37,7 @@ With 64-bit Python 3.12 and Tkinter installed, run these commands in PowerShell:
 ```powershell
 git clone https://github.com/vettive8/mervive-code.git
 cd mervive-code
-python -m pip install Pillow Pygments pypdfium2 "Send2Trash[nativeLib]"
+python -m pip install Pillow Pygments pypdfium2 tkinterdnd2 "Send2Trash[nativeLib]"
 python viewer.pyw .
 ```
 
@@ -53,6 +53,8 @@ The final dot opens this repository. Replace it with a quoted path to open anoth
 Scroll continuously through PDFs in the editor. The scrollbar spans the whole document, and Mervive renders pages near your reading position. TXT and Markdown open in the text editor.
 
 Mervive opens text files up to 1 MiB for editing when their encoding and line endings support a safe round trip. Larger files open as previews. The folder tree expands in place, so you can inspect a nested file and keep the rest of the project in view.
+
+Drag files or folders from Windows File Explorer onto a project folder to copy them into it. Dropping onto a file copies into its containing folder. Existing names are skipped.
 
 Click an Explorer row and press **Delete** to move the selected file or folder to the Windows Recycle Bin. Right-click a row to open or expand it, copy its path, or delete it.
 
