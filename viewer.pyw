@@ -1,4 +1,5 @@
 from pathlib import Path
+import explorer_order
 import sys
 import ctypes
 from ctypes import wintypes
@@ -268,6 +269,12 @@ class Viewer:
                                 activeforeground="white", relief="flat", bd=0)
         options.pack(side="right",padx=14)
         actions = tk.Menu(options,tearoff=False,bg=SIDE,fg=FG)
+        self.order = {"view": "Alphabetical", "folders": {}}
+        self.order_view = tk.StringVar(value="Alphabetical")
+        for view in ("Order", "Alphabetical"):
+            actions.add_radiobutton(label=view, variable=self.order_view, value=view,
+                                    command=self.switch_order_view)
+        actions.add_separator()
         actions.add_command(label="Open Folder…",command=self.choose_folder)
         actions.add_command(label="Refresh folder and file", accelerator="F5", command=self.refresh_workspace)
         root.bind("<F5>", self.refresh_workspace)
@@ -309,7 +316,12 @@ class Viewer:
         self.file_icons[".pyw"] = self.file_icons[".py"]
         self.file_icons[".ico"] = self.file_icons[".png"]
         self.files.pack(fill="both",expand=True)
-        self.files.bind("<ButtonRelease-1>",self.open_selected)
+        self.drag_start = None
+        self.drag_active = False
+        self.drop_line = tk.Frame(self.files, height=2, bg=BLUE)
+        self.files.bind("<ButtonPress-1>", self.start_reorder)
+        self.files.bind("<B1-Motion>", self.drag_reorder)
+        self.files.bind("<ButtonRelease-1>", self.finish_reorder)
         self.files.bind("<Return>",self.open_selected)
         self.files.bind("<Double-Button-1>", lambda _: "break")
         self.files.bind("<Left>", self.tree_arrow)
@@ -602,13 +614,100 @@ class Viewer:
         else:
             self.files.pack_forget()
 
-    def folder_items(self, path):
+    def save_order(self, **changes):
+        updated = {**self.order, **changes}
         try:
-            return sorted((item for item in path.iterdir() if item.name != ".git"),
-                          key=lambda item: (not item.is_dir(), item.name.casefold()))
+            explorer_order.write_order(self.folder, self.order, updated)
+        except (OSError, ValueError) as exc:
+            self.refresh_feedback(str(exc))
+            return False
+        self.order = updated
+        return True
+
+    def switch_order_view(self):
+        view = self.order_view.get()
+        if self.save_order(view=view):
+            self.refresh_workspace()
+        else:
+            self.order_view.set(self.order["view"])
+
+    def start_reorder(self, event):
+        self.drag_active = False
+        row = self.files.identify_row(event.y)
+        self.drag_start = (row, event.x, event.y) if row and self.order_view.get() == "Order" else None
+
+    def drop_target(self, event):
+        source = self.drag_start[0]
+        target = self.files.identify_row(event.y)
+        if (not target or source == target or not self.files.exists(source)
+                or not 0 <= event.x < self.files.winfo_width()
+                or self.files.parent(source) != self.files.parent(target)):
+            return None
+        x, y, width, height = self.files.bbox(target)
+        after = event.y >= y + height / 2
+        return target, after, y + height if after else y
+
+    def drag_reorder(self, event):
+        if not self.drag_start:
+            return
+        _, x, y = self.drag_start
+        if not self.drag_active and max(abs(event.x - x), abs(event.y - y)) < 5:
+            return
+        self.drag_active = True
+        if event.y < 15 or event.y > self.files.winfo_height() - 15:
+            self.files.yview_scroll(-1 if event.y < 15 else 1, "units")
+        target = self.drop_target(event)
+        if target:
+            self.drop_line.place(x=0, y=target[2]-1, relwidth=1)
+        else:
+            self.drop_line.place_forget()
+        return "break"
+
+    def finish_reorder(self, event):
+        try:
+            if not self.drag_active or not self.drag_start:
+                return self.open_selected(event)
+            target = self.drop_target(event)
+            if target:
+                source = self.drag_start[0]
+                parent = self.files.parent(source)
+                siblings = list(self.files.get_children(parent))
+                siblings.remove(source)
+                index = siblings.index(target[0]) + int(target[1])
+                siblings.insert(index, source)
+                key = Path(source).parent.relative_to(self.folder).as_posix()
+                folders = {**self.order["folders"], key: [Path(node).name for node in siblings]}
+                if self.save_order(folders=folders):
+                    self.files.move(source, parent, index)
+            return "break"
+        finally:
+            self.drag_start = None
+            self.drag_active = False
+            self.drop_line.place_forget()
+
+    def folder_items(self, path, root=None):
+        root = root or self.folder
+        try:
+            items = sorted((item for item in path.iterdir() if item.name != ".git"
+                            and item != root / explorer_order.FILENAME),
+                           key=lambda item: (not item.is_dir(), item.name.casefold()))
         except OSError as exc:
             messagebox.showerror("Open folder", str(exc))
             return None
+        if self.order["view"] == "Order":
+            key = path.relative_to(root).as_posix()
+            saved = self.order["folders"].get(key, [])
+            ranks = {name: index for index, name in enumerate(saved)}
+            items.sort(key=lambda item: ranks.get(item.name, len(saved)))
+            additions = [item.name for item in items if item.name not in ranks]
+            if additions:
+                updated = {**self.order, "folders": {**self.order["folders"], key: saved + additions}}
+                try:
+                    explorer_order.write_order(root, self.order, updated)
+                    self.order = updated
+                except (OSError, ValueError) as exc:
+                    self.refresh_feedback(str(exc))
+        return items
 
     def insert_items(self, parent, items):
         for item in items:
@@ -619,9 +718,17 @@ class Viewer:
                               image=self.file_icons.get(key, self.file_icons["file"]))
 
     def browse(self, path):
-        items = self.folder_items(path)
+        previous = self.order
+        try:
+            self.order = explorer_order.read_order(path)
+        except (ValueError, OSError) as exc:
+            self.refresh_feedback(str(exc))
+            self.order = {"view": "Alphabetical", "folders": {}}
+        items = self.folder_items(path, path)
         if items is None:
+            self.order = previous
             return
+        self.order_view.set(self.order["view"])
         expanded = sorted((node for node in self.loaded_folders if self.files.item(node, "open")),
                           key=lambda node: len(Path(node).parts)) if path == self.folder else []
         self.folder = path

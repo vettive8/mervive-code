@@ -52,6 +52,12 @@ The final dot opens this repository. Replace it with a quoted path to open anoth
 
 Mervive opens text files up to 1 MiB for editing when their encoding and line endings support a safe round trip. Larger files open as previews. The folder tree expands in place, so you can inspect a nested file and keep the rest of the project in view.
 
+## Explorer views
+
+Choose **Order** or **Alphabetical** from the Explorer's **…** menu. In Order, drag a row to the blue line to place it above or below another item in the same folder. Files and folders can be mixed. Newly discovered entries appear at the end.
+
+The project keeps its view and sequences in `.mervive-order.json`. Each key in `folders` is a relative directory path (`.` for the project root). Its value lists the child names in reading order. An agent can edit this file and you can press **F5** to apply the changes. Switching to Alphabetical preserves your saved order.
+
 ## Optional Windows launcher
 
 To show **Mervive Code** in Task Manager, install Visual Studio C++ Build Tools with the x64 toolchain and Windows SDK, then run the following from the repository folder:
