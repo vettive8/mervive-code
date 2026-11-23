@@ -52,3 +52,24 @@ To show **Mervive Code** in Task Manager, install Visual Studio C++ Build Tools 
 ```
 
 Build the launcher on the computer where you will use it. It loads that computer's Python installation and the adjacent `viewer.pyw`.
+
+## Explanation board
+
+Open **View → Explanation board** in a project with a `.mervive-board.json` file. Click a box or play the walkthrough to follow a user story into the engineering decision and the actual source. **Select in editor** jumps to the matching expression. Drag the board or use the horizontal scrollbar to explore it.
+
+Codex, Claude or a person can update the project JSON while the board is open. Append a step to draw another box, change its explanation, or set the optional top-level `focus` to a step ID to guide the reader there. The board checks for changes about twice per second. Write the complete JSON atomically when streaming updates. Source anchors are exact, unique snippets from text files inside the project. If an anchor goes stale, the board displays the problem.
+
+```json
+{
+  "title": "How the greeting works",
+  "focus": "greeting",
+  "steps": [{
+    "id": "greeting",
+    "title": "Show a greeting",
+    "story": "I see a welcome message when I arrive.",
+    "why": "Start with a heading so the welcome works before JavaScript loads.",
+    "file": "index.html",
+    "anchor": "<h1>Welcome</h1>"
+  }]
+}
+```

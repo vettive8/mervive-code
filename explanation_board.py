@@ -197,7 +197,7 @@ class ExplanationBoard:
                 c.create_line(x-29,112,x,112,fill="#8a9283",width=2,arrow="last")
             tag=f"step{i}"
             c.create_rectangle(x,79,x+180,145, fill="#453b30" if i==self.index else PANEL,
-                               outline=ACCENT if i==self.index else "#626b60", width=2,tags=tag)
+                               outline="#626b60", width=2,tags=tag)
             c.create_text(x+90,111,text=step["title"],width=164,justify="center",fill=INK,
                           font=("Segoe UI",11,"bold"),tags=tag)
             c.tag_bind(tag,"<Button-1>",lambda e,n=i:self.select(n))
@@ -209,6 +209,21 @@ class ExplanationBoard:
             t=n/22
             x=begin+(end-begin)*t*t*(3-2*t)
             y=47-12*4*t*(1-t)
+            # Draw the selected box in reading order as the guide points to it.
+            left = end-90
+            corners = [(left,79),(left+180,79),(left+180,145),(left,145),(left,79)]
+            outline = [corners[0]]
+            remaining = t*492
+            for (ax,ay),(bx,by) in zip(corners,corners[1:]):
+                length = abs(bx-ax)+abs(by-ay)
+                part = min(1,remaining/length)
+                outline.append((ax+(bx-ax)*part,ay+(by-ay)*part))
+                remaining -= length
+                if remaining <= 0:
+                    break
+            c.delete("ink")
+            ink=c.create_line(*outline,fill=ACCENT,width=2,tags=("ink",f"step{self.index}"))
+            c.tag_raise(ink)
             c.delete("guide")
             c.create_oval(x-18,y-17,x+18,y+17,fill="#c9c7bc",outline="",tags="guide")
             for dx in (-8,8):
