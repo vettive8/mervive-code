@@ -144,7 +144,8 @@ class Viewer:
         options.pack(side="right",padx=14)
         actions = tk.Menu(options,tearoff=False,bg=SIDE,fg=FG)
         actions.add_command(label="Open Folder…",command=self.choose_folder)
-        actions.add_command(label="Refresh Explorer",command=lambda:self.browse(self.folder))
+        actions.add_command(label="Refresh folder and file", accelerator="F5", command=self.refresh_workspace)
+        root.bind("<F5>", self.refresh_workspace)
         actions.add_command(label="Expand / Collapse Folder",command=lambda:self.set_folder_expanded(not self.folder_expanded))
         options.config(menu=actions)
         self.folder_expanded = True
@@ -505,8 +506,40 @@ class Viewer:
         self.loaded_folders.clear()
         self.insert_items("", items)
         for node in expanded:
-            if self.files.exists(node):
+            if self.files.exists(node) and self.files.tag_has("directory", node):
                 self.set_branch(node, True)
+
+    def refresh_workspace(self, event=None):
+        selected = self.files.focus()
+        tree_top = self.files.yview()[0]
+        expanded = self.folder_expanded
+        focus = self.root.focus_get()
+        self.browse(self.folder)
+        if not expanded:
+            self.set_folder_expanded(False)
+
+        if self.path:
+            dirty = self.editable and self.code.get("1.0", "end-1c") != self.original
+            if dirty:
+                self.status.config(text="Folder refreshed · Unsaved edits kept")
+            elif not self.path.is_file():
+                self.close_file()
+            else:
+                cursor = self.code.index("insert")
+                top = self.code.index("@0,0").split(".")[0] + ".0"
+                left = self.code.xview()[0]
+                self.show(self.path, reload=True)
+                self.code.mark_set("insert", cursor)
+                self.code.yview(top)
+                self.code.xview_moveto(left)
+
+        if selected and self.files.exists(selected):
+            self.files.focus(selected)
+            self.files.selection_set(selected)
+        self.files.yview_moveto(tree_top)
+        if focus and focus.winfo_ismapped():
+            focus.focus_set()
+        return "break"
 
     def set_branch(self, node, expanded):
         if expanded and node not in self.loaded_folders:
@@ -556,6 +589,8 @@ class Viewer:
 
     def open_selected(self, event):
         node = self.files.identify_row(event.y) if event.type == tk.EventType.ButtonRelease else self.files.focus()
+        if node and not Path(node).exists():
+            return self.refresh_workspace()
         if node:
             self.files.focus(node)
             self.files.selection_set(node)
@@ -617,8 +652,8 @@ class Viewer:
         self.image_panel.pack(fill="both",expand=True)
         self.status.config(text=path.name)
 
-    def show(self, path):
-        if self.path == path and self.editable:
+    def show(self, path, *, reload=False):
+        if self.path == path and self.editable and not reload:
             self.code.focus_set()
             return
         if not self.can_leave():
