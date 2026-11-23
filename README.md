@@ -2,7 +2,33 @@
 
 Mervive Code is a lightweight Windows editor for people who write code with the Codex desktop app or Claude Code in Claude Desktop. Keep the conversation in your AI app. Open the same project folder in Mervive to read the implementation, find a line, or make an edit yourself.
 
-**Already use VS Code?** Choose **File → Open Folder** in either editor and select the same directory. Both edit ordinary files on disk. You can move between them without importing or converting the project. If your agent works in a separate Git worktree, open that worktree's folder to see its changes.
+## Windows editor benchmark
+
+| Editor | Launch to filename in title | Private RAM | CPU after launch | Processes |
+| --- | ---: | ---: | ---: | ---: |
+| Mervive Code | 2.8 s | 31.2 MiB | 0.03% | 1 |
+| VS Code 1.141.0 | 7.7 s | 940.4 MiB | 22.73% | 11–18 |
+| Antigravity IDE 2.8.0 | 13.5 s | 852.6 MiB | 6.83% | 9 |
+
+**How we measured.** Each editor opened the same 36 KiB Python file on a Windows 10 laptop with an Intel Core i7-7700HQ (8 logical processors) and 7.9 GiB of usable RAM. We ran one editor under test at a time, twice per editor, reversing the order for the second round. The table shows the two-run means and the observed process counts.
+
+Launch time ends when the window title first contains the filename. After an eight-second settling period, we sampled the editor and its child processes over a ten-second idle interval. RAM is the average private working set at the two endpoints. CPU is the share of total machine capacity used by processes present at both endpoints.
+
+VS Code and Antigravity used separate benchmark profiles with user extensions disabled. Each reused its profile on the second launch. An existing Antigravity session stayed open throughout. Each measurement counts only the editor process tree launched for that test. Running a separate AI desktop app adds its own resource usage. Startup activity can continue during the idle interval, and results vary with project size and extensions.
+
+<details>
+<summary>Individual runs</summary>
+
+| Run | Editor | Launch | Private RAM | CPU after launch |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | Mervive Code | 3.6 s | 31.4 MiB | 0.05% |
+| 1 | VS Code | 11.2 s | 976.0 MiB | 20.93% |
+| 1 | Antigravity IDE | 19.0 s | 770.9 MiB | 4.46% |
+| 2 | Antigravity IDE | 8.0 s | 934.4 MiB | 9.20% |
+| 2 | VS Code | 4.3 s | 904.8 MiB | 24.53% |
+| 2 | Mervive Code | 1.9 s | 31.1 MiB | 0.00% |
+
+</details>
 
 ## Try it on Windows
 
@@ -19,25 +45,12 @@ The final dot opens this repository. Replace it with a quoted path to open anoth
 
 ## A typical edit with your AI app
 
-1. Give Codex or Claude Code access to the local project folder and ask for a small change.
+1. Open the same project folder you use in VS Code (or the agent’s worktree) in Mervive. Give Codex or Claude Code access to that folder and ask for a small change.
 2. Open the file it changed in Mervive. If the file was already on screen, close its tab and reopen it to read the latest saved version. Use **Refresh Explorer** in the Explorer menu to see newly created files.
 3. Use **Ctrl+F** to find the relevant code, make your edit, and save with **Ctrl+S**. **Ctrl+Z** undoes an edit. **Ctrl+Y** or **Ctrl+Shift+Z** redoes it.
 4. Ask the agent to review the saved change or run the project's tests. If another app writes to the file while you have unsaved edits, Mervive warns you before overwriting it.
 
 Mervive opens text files up to 1 MiB for editing when their encoding and line endings support a safe round trip. Larger files open as previews. The folder tree expands in place, so you can inspect a nested file and keep the rest of the project in view.
-
-## Mervive Code, VS Code, or Antigravity?
-
-| While working with a desktop coding agent | Mervive Code | VS Code | Antigravity IDE |
-| --- | --- | --- | --- |
-| Open an existing project and edit its files | Folder tree, syntax highlighting, find, save, undo and redo | Folder workspaces and a full code editor | Project explorer and a full code editor |
-| Decide where to work with the AI | Keep the conversation in Codex or Claude Desktop | Use the separate desktop app or an editor chat integration | Use the separate desktop app or Antigravity's integrated agent |
-| Run a command or test | Ask the desktop agent or use a separate terminal | Use the integrated terminal or the desktop agent | Use the integrated terminal or ask the agent |
-| Best fit | You already have an AI app and want a small window for the code | You want breakpoints, extensions, or terminal tools alongside the code | You want the agent to work across the editor, terminal, and browser |
-
-In one Windows session with the same Python file open, Mervive used **30.1 MiB of private resident RAM in one process**. Antigravity and its helpers used **994 MiB across 23 processes**. These are snapshots of those editor sessions. A separately running Codex or Claude desktop app has its own memory usage. VS Code was outside that measurement.
-
-Read more about the other workflows in the [VS Code editor guide](https://code.visualstudio.com/docs/editing/getting-started/tips-and-tricks), [Antigravity IDE overview](https://www.antigravity.google/product/antigravity-ide), and [Claude Code desktop guide](https://code.claude.com/docs/en/desktop).
 
 ## Optional Windows launcher
 
