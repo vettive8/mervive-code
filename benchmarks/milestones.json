@@ -1,0 +1,176 @@
+{
+  "v1": {
+    "revision": "0b373d9dbd2100a0f016309011ef69ae33fe6539",
+    "text": [
+      {
+        "Editor": "Mervive",
+        "Round": "1",
+        "Launch": "2.449421",
+        "RAM": "34.1171875",
+        "CPU": "0.03628275513088315",
+        "Count": "1",
+        "Common": "1",
+        "StartCount": "1"
+      },
+      {
+        "Editor": "Mervive",
+        "Round": "2",
+        "Launch": "1.9301403",
+        "RAM": "34",
+        "CPU": "0.035694514135365694",
+        "Count": "1",
+        "Common": "1",
+        "StartCount": "1"
+      }
+    ],
+    "pdf": [
+      {
+        "fixture_sha256": "050a04964a92fab0f68f3ccf4525f458b437f13a70f01edb7e79498b521d58fb",
+        "viewport": [
+          618,
+          530
+        ],
+        "results": [
+          {
+            "phase": "Open idle",
+            "private_MiB": 42.280859375,
+            "cpu_pct": 0.11709335811101398,
+            "page": 1,
+            "wheel_events": 0
+          },
+          {
+            "phase": "Scrolling",
+            "private_MiB": 46.83828125,
+            "cpu_pct": 1.5602716823939653,
+            "page": 7,
+            "wheel_events": 100
+          },
+          {
+            "phase": "After scrolling",
+            "private_MiB": 44.779296875,
+            "cpu_pct": 0.13659908100907,
+            "page": 7,
+            "wheel_events": 0
+          }
+        ]
+      },
+      {
+        "fixture_sha256": "050a04964a92fab0f68f3ccf4525f458b437f13a70f01edb7e79498b521d58fb",
+        "viewport": [
+          618,
+          530
+        ],
+        "results": [
+          {
+            "phase": "Open idle",
+            "private_MiB": 42.382421875,
+            "cpu_pct": 0.13658882534357622,
+            "page": 1,
+            "wheel_events": 0
+          },
+          {
+            "phase": "Scrolling",
+            "private_MiB": 46.725,
+            "cpu_pct": 1.5219715826309304,
+            "page": 7,
+            "wheel_events": 100
+          },
+          {
+            "phase": "After scrolling",
+            "private_MiB": 45.0109375,
+            "cpu_pct": 0.1365743458469797,
+            "page": 7,
+            "wheel_events": 0
+          }
+        ]
+      }
+    ]
+  },
+  "current": {
+    "revision": "16e1ae6a875935b087969eecc86979d145c9eb94",
+    "text": [
+      {
+        "Editor": "Mervive",
+        "Round": "1",
+        "Launch": "2.9485751",
+        "RAM": "34.27734375",
+        "CPU": "0.03693976525515611",
+        "Count": "1",
+        "Common": "1",
+        "StartCount": "1"
+      },
+      {
+        "Editor": "Mervive",
+        "Round": "2",
+        "Launch": "1.8991503",
+        "RAM": "34.0859375",
+        "CPU": "0",
+        "Count": "1",
+        "Common": "1",
+        "StartCount": "1"
+      }
+    ],
+    "pdf": [
+      {
+        "fixture_sha256": "050a04964a92fab0f68f3ccf4525f458b437f13a70f01edb7e79498b521d58fb",
+        "viewport": [
+          618,
+          530
+        ],
+        "results": [
+          {
+            "phase": "Open idle",
+            "private_MiB": 41.855859375,
+            "cpu_pct": 0.15618521437296468,
+            "page": 1,
+            "wheel_events": 0
+          },
+          {
+            "phase": "Scrolling",
+            "private_MiB": 46.982421875,
+            "cpu_pct": 2.0099647140918773,
+            "page": 7,
+            "wheel_events": 100
+          },
+          {
+            "phase": "After scrolling",
+            "private_MiB": 45.09609375,
+            "cpu_pct": 0.13671840410258912,
+            "page": 7,
+            "wheel_events": 0
+          }
+        ]
+      },
+      {
+        "fixture_sha256": "050a04964a92fab0f68f3ccf4525f458b437f13a70f01edb7e79498b521d58fb",
+        "viewport": [
+          618,
+          530
+        ],
+        "results": [
+          {
+            "phase": "Open idle",
+            "private_MiB": 41.497265625,
+            "cpu_pct": 0.09765396001467952,
+            "page": 1,
+            "wheel_events": 0
+          },
+          {
+            "phase": "Scrolling",
+            "private_MiB": 46.048828125,
+            "cpu_pct": 1.1709201380456336,
+            "page": 7,
+            "wheel_events": 100
+          },
+          {
+            "phase": "After scrolling",
+            "private_MiB": 44.64453125,
+            "cpu_pct": 0.0585513646671253,
+            "page": 7,
+            "wheel_events": 0
+          }
+        ]
+      }
+    ]
+  }
+}

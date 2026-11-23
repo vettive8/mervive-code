@@ -2,22 +2,43 @@
 
 [Back to Mervive Code](README.md)
 
-## Version checkpoints
+## Mervive milestones
 
-| Checkpoint | Source lines | Launch | Private RAM | CPU after launch | Processes |
+Two fresh Mervive launches per checkpoint on the same laptop. Each opened the original 36,918-byte Python fixture. RAM is private working set. CPU is a percentage of the whole machine during the post-launch idle interval. The original editor comparisons below serve as fixed reference measurements.
+
+| Version | App source lines | Launch | Private RAM | CPU after launch | Processes |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| [Original editor benchmark](https://github.com/vettive8/mervive-code/tree/14454a6) | 832 | 2.8 s | 31.2 MiB | 0.03% | 1 |
-| [v1 · text, PDF and folder editor](https://github.com/vettive8/mervive-code/tree/v1) | 1,626 | Unmeasured | Unmeasured | Unmeasured | Unmeasured |
+| [Original editor](https://github.com/vettive8/mervive-code/tree/14454a6) | 832 | 2.8 s | 31.2 MiB | 0.03% | 1 |
+| [v1 · text and PDF editor](https://github.com/vettive8/mervive-code/tree/v1) | 1,626 | 2.19 s | 34.1 MiB | 0.04% | 1 |
+| [Internal folder moves](https://github.com/vettive8/mervive-code/tree/16e1ae6a875935b087969eecc86979d145c9eb94) | 1,702 | 2.42 s | 34.2 MiB | 0.02% | 1 |
 
-Source lines include blank lines and comments in tracked Python, C, PowerShell and Windows resource scripts. The v1 total comprises 1,549 Python lines and 77 Windows launcher, build and resource lines. Source size and runtime memory are separate measurements.
+App source lines include comments and blank lines in shipped Python, Windows launcher, resource and build files. The benchmark tools are counted separately. Small differences between two-run means can reflect background activity. An existing Mervive window remained open outside the measured process trees.
 
-## Comparing v1 and v2
+## PDF reading
 
-When v2 is ready, run the tagged v1 and the v2 candidate on the same PC, one editor at a time. For the text workload, open the same 36 KiB Python file from the original benchmark in both builds. Follow the timing and process-counting procedure below. Record the commit, source lines, launch time, private RAM, CPU and process count for each version, then report the difference.
+Each build opened the same generated 24-page text PDF twice, in separate Python processes running the real Mervive reader. Each used Reading size and a 618 × 530 pixel PDF viewport. After eight seconds to settle, the driver recorded ten seconds idle, ten seconds scrolling and ten seconds idle again. Each scroll run sent 100 wheel events and reached page 7.
 
-For the PDF workload, use the same PDF, window size and zoom in both builds. Record its page count and measure private RAM and CPU after opening, during the same scroll sequence, and after scrolling stops. Keep these results in their own table so PDF rendering costs are visible.
+| Reader state | v1 RAM | v1 CPU | Internal moves RAM | Internal moves CPU |
+| --- | ---: | ---: | ---: | ---: |
+| Open and idle | 42.3 MiB | 0.13% | 41.7 MiB | 0.13% |
+| Scrolling | 46.8 MiB | 1.54% | 46.5 MiB | 1.59% |
+| After scrolling | 44.9 MiB | 0.14% | 44.9 MiB | 0.10% |
 
-## Windows editor benchmark
+PDF RAM is the mean of one private resident-page sample per second, averaged across the two runs. CPU includes the in-process test driver and rendering. Image-heavy or scanned PDFs can use more memory. Tagged v1 logged a Windows title-bar paint callback warning during setup. Both scrolling runs completed. The internal-moves build corrects the handle type.
+
+## Repeat at the next milestone
+
+Build the Windows launcher and run these commands at the repository root. Run one editor under test at a time. The text script runs Mervive twice and prints its results directory. Each PDF invocation runs once and prints JSON. Record the application commit, line count and both sets of results.
+
+```powershell
+.\benchmarks\text.ps1
+python benchmarks/pdf.py
+python benchmarks/pdf.py
+```
+
+[Recorded runs](benchmarks/milestones.json) · [Text workload](benchmarks/text.ps1) · [PDF workload](benchmarks/pdf.py)
+
+## Original Windows editor comparison
 
 | Editor | Launch to filename in title | Private RAM | CPU after launch | Processes |
 | --- | ---: | ---: | ---: | ---: |
