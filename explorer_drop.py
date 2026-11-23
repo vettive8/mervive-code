@@ -1,4 +1,4 @@
-"""Copy local Windows Explorer drops into a project without replacing existing items."""
+"""Transfer local Windows Explorer drops into a project without replacing existing items."""
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import os
@@ -13,8 +13,39 @@ def check_directory_links(directory, names):
     return ()
 
 
-def copy_dropped_items(project, folder, sources):
-    copied, skipped = [], []
+def move_item(source, target):
+    try:
+        source.rename(target)
+        return
+    except OSError as exc:
+        if getattr(exc, "winerror", None) != 17:  # ERROR_NOT_SAME_DEVICE
+            raise
+
+    # Let the Windows shell handle cross-volume moves, including folder metadata
+    # and recovery from partial transfers. Leave collision confirmation enabled.
+    import pythoncom
+    from win32com.shell import shell, shellcon
+    pythoncom.CoInitialize()
+    try:
+        operation = pythoncom.CoCreateInstance(shell.CLSID_FileOperation, None,
+            pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IFileOperation)
+        operation.SetOperationFlags(shellcon.FOFX_EARLYFAILURE | shellcon.FOF_NOERRORUI)
+        item = shell.SHCreateItemFromParsingName(str(source), None, shell.IID_IShellItem)
+        parent = shell.SHCreateItemFromParsingName(str(target.parent), None, shell.IID_IShellItem)
+        operation.MoveItem(item, parent, target.name, None)
+        operation.PerformOperations()
+        if operation.GetAnyOperationsAborted() or os.path.lexists(source):
+            raise OSError("Windows did not finish moving this item")
+    except pythoncom.com_error as exc:
+        raise OSError(str(exc)) from exc
+    finally:
+        pythoncom.CoUninitialize()
+
+
+def transfer_dropped_items(project, folder, sources, action):
+    transferred, skipped = [], []
+    if action not in ("copy", "move"):
+        raise ValueError("Unknown drop action")
     for source in sources:
         try:
             if not folder.resolve(strict=True).is_relative_to(project.resolve(strict=True)):
@@ -25,7 +56,11 @@ def copy_dropped_items(project, folder, sources):
             if os.path.lexists(target):
                 raise ValueError("An item with this name already exists")
             if source.is_dir() and folder.resolve().is_relative_to(source.resolve()):
-                raise ValueError("A folder cannot be copied inside itself")
+                raise ValueError("A folder cannot be dropped inside itself")
+            if action == "move":
+                move_item(source, target)
+                transferred.append(target)
+                continue
             with TemporaryDirectory(prefix=".mervive-copy-", dir=folder) as temporary:
                 staged = Path(temporary) / source.name
                 if source.is_dir():
@@ -34,7 +69,7 @@ def copy_dropped_items(project, folder, sources):
                     shutil.copy2(source, staged)
                 # Windows rename fails if another process created the target during the copy.
                 staged.rename(target)
-            copied.append(target)
+            transferred.append(target)
         except (OSError, ValueError, RuntimeError) as exc:
             skipped.append(f"{source.name}: {exc}")
-    return copied, skipped
+    return transferred, skipped

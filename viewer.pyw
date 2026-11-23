@@ -1,8 +1,8 @@
 from pathlib import Path
 from pdf_preview import PdfPreview
-from explorer_drop import copy_dropped_items
+from explorer_drop import transfer_dropped_items
 from concurrent.futures import ThreadPoolExecutor
-from tkinterdnd2 import TkinterDnD, DND_FILES, COPY, REFUSE_DROP
+from tkinterdnd2 import TkinterDnD, DND_FILES, COPY, MOVE, REFUSE_DROP
 import explorer_order
 import sys
 import ctypes
@@ -332,7 +332,7 @@ class Viewer:
         self.files.bind("<Double-Button-1>", lambda _: "break")
         self.files.bind("<Left>", self.tree_arrow)
         self.files.bind("<Right>", self.tree_arrow)
-        self.copy_job = None
+        self.transfer_job = None
         self.drop_hover = None
         if isinstance(root, TkinterDnD.Tk):
             for surface in (self.folder_label, self.files):
@@ -529,8 +529,8 @@ class Viewer:
         return answer is False or (answer is True and self.save())
 
     def quit_editor(self):
-        if self.copy_job:
-            self.refresh_feedback("Copy in progress. Close after it finishes.")
+        if self.transfer_job:
+            self.refresh_feedback("Transfer in progress. Close after it finishes.")
             return
         if self.can_leave():
             remember_folder(self.folder)
@@ -875,17 +875,26 @@ class Viewer:
                 return Path(row) if self.files.tag_has("directory", row) else Path(row).parent
         return self.folder
 
+    def external_action(self, event):
+        if self.transfer_job:
+            return REFUSE_DROP
+        control = any(key.lower() in ("ctrl", "control") for key in event.modifiers)
+        if not control and MOVE in event.actions:
+            return MOVE
+        return COPY if COPY in event.actions else REFUSE_DROP
+
     def external_drag(self, event):
-        if self.copy_job or COPY not in event.actions:
+        action = self.external_action(event)
+        if action == REFUSE_DROP:
             return REFUSE_DROP
         folder = self.external_destination(event)
-        if folder != self.drop_hover:
-            self.drop_hover = folder
+        if (folder, action) != self.drop_hover:
+            self.drop_hover = (folder, action)
             if self.notice_timer:
                 self.root.after_cancel(self.notice_timer)
                 self.notice_timer = None
-            self.notice.config(text=f"Copy to {folder.name}", fg=FG)
-        return COPY
+            self.notice.config(text=f"{action.capitalize()} to {folder.name}", fg=FG)
+        return action
 
     def leave_external_drag(self, event):
         if self.drop_hover is not None:
@@ -895,7 +904,8 @@ class Viewer:
 
     def external_drop(self, event):
         self.leave_external_drag(event)
-        if self.copy_job or COPY not in event.actions:
+        action = self.external_action(event)
+        if action == REFUSE_DROP:
             return REFUSE_DROP
         folder = self.external_destination(event)
         project = self.folder
@@ -903,31 +913,34 @@ class Viewer:
         if not sources:
             return REFUSE_DROP
         worker = ThreadPoolExecutor(max_workers=1)
-        job = worker.submit(copy_dropped_items, project, folder, sources)
+        job = worker.submit(transfer_dropped_items, project, folder, sources, action)
         worker.shutdown(wait=False)
-        self.copy_job = job
-        self.notice.config(text=f"Copying to {folder.name}…", fg=FG)
+        self.transfer_job = job
+        progress, done = ("Moving", "Moved") if action == MOVE else ("Copying", "Copied")
+        self.notice.config(text=f"{progress} to {folder.name}…", fg=FG)
 
         def finish():
             if not job.done():
                 self.root.after(100, finish)
                 return
-            self.copy_job = None
-            copied, skipped = job.result()
-            if copied and self.folder == project:
+            self.transfer_job = None
+            transferred, skipped = job.result()
+            if transferred and self.folder == project:
                 self.refresh_workspace()
                 if folder != project and self.files.exists(str(folder)):
                     self.set_branch(str(folder), True)
-                row = str(copied[0])
+                row = str(transferred[0])
                 if self.files.exists(row):
                     self.files.selection_set(row)
                     self.files.focus(row)
                     self.files.see(row)
-            self.refresh_feedback(f"Copied {len(copied)} to {folder.name}")
+            self.refresh_feedback(f"{done} {len(transferred)} to {folder.name}")
             if skipped:
                 messagebox.showwarning("Skipped items", "\n".join(skipped), parent=self.root)
         self.root.after(50, finish)
-        return COPY
+        # The worker owns source removal. Never signal a source-side delete,
+        # especially when a multi-item drop might partially fail.
+        return COPY if action == COPY else REFUSE_DROP
 
     def explorer_menu(self, event):
         node = self.files.identify_row(event.y)
