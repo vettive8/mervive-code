@@ -95,6 +95,31 @@ def configure_window_frame(root):
     root.bind("<Map>", request_repaint, add="+")
     root.bind("<Configure>", request_repaint, add="+")
 
+    class MonitorInfo(ctypes.Structure):
+        _fields_ = [("size", wintypes.DWORD), ("bounds", wintypes.RECT),
+                    ("work", wintypes.RECT), ("flags", wintypes.DWORD)]
+
+    user.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+    user.MonitorFromPoint.restype = wintypes.HANDLE
+    user.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(MonitorInfo)]
+    user.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
+    user.MonitorFromWindow.restype = wintypes.HANDLE
+
+    def snap_at_top(window, start_x, start_y):
+        point = wintypes.POINT()
+        if not user.GetCursorPos(ctypes.byref(point)):
+            return
+        if abs(point.x - start_x) + abs(point.y - start_y) < 5:
+            return
+        monitor = user.MonitorFromPoint(point, 0)
+        info = MonitorInfo()
+        info.size = ctypes.sizeof(info)
+        if monitor and user.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            if 0 <= point.y - info.bounds.top <= 4:
+                if user.MonitorFromWindow(window, 2) != monitor:
+                    user.SetWindowPos(window, 0, info.work.left, info.work.top, 0, 0, 0x15)
+                user.ShowWindow(window, 3)  # SW_MAXIMIZE uses the monitor work area.
+
     controls = ctypes.windll.comctl32
     word, signed = ctypes.c_size_t, ctypes.c_ssize_t
     callback = ctypes.WINFUNCTYPE(signed, wintypes.HWND, wintypes.UINT, word, signed, word, word)
@@ -132,9 +157,13 @@ def configure_window_frame(root):
             user.SetWindowPos(window, 0, point.x - dx, point.y - dy, 0, 0, 0x15)
             return 0
         if drag is not None and message in (0x0202, 0x001F, 0x0215):
+            start_x, start_y = drag[-2:]
             drag = None  # button released, cancel mode, or capture lost
             if user.GetCapture() == window:
                 user.ReleaseCapture()
+            if message == 0x0202:
+                snap_at_top(window, start_x, start_y)
+                return 0
         if message == 0x0014 and brush:  # WM_ERASEBKGND: exposed frame behind Tk widgets
             rect = wintypes.RECT()
             user.GetClientRect(window, ctypes.byref(rect))
