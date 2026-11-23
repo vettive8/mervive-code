@@ -22,6 +22,34 @@ COLORS = [(Comment, "#6a9955"), (String.Regex, "#d16969"), (String, "#ce9178"),
 LIMIT = 1024 * 1024
 
 
+def folder_setting():
+    return Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Mervive Code" / "last-folder.txt"
+
+
+def startup_folder():
+    try:
+        path = Path(folder_setting().read_text(encoding="utf-8"))
+        if path.is_absolute() and path.is_dir():
+            return path
+    except (OSError, ValueError):
+        pass
+    return Path.home()
+
+
+def remember_folder(folder):
+    target = folder_setting()
+    temporary = None
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=target.parent, delete=False, mode="w", encoding="utf-8") as stream:
+            temporary = Path(stream.name)
+            stream.write(str(folder))
+        temporary.replace(target)
+    except OSError:
+        if temporary:
+            temporary.unlink(missing_ok=True)
+
+
 def activity_icon(name):
     # Rasterize at 4x so diagonal strokes stay smooth at taskbar-scale dimensions.
     im = Image.new("RGBA", (96, 96))
@@ -151,8 +179,13 @@ class Viewer:
                 widget.bind("<Button-1>", lambda _: command())
                 widget.config(cursor="hand2")
             return widget
-        self.status = label(root, "", anchor="e", padx=14)
-        self.status.pack(side="bottom", fill="x", ipady=3)
+        status_bar = tk.Frame(root, bg=SIDE)
+        status_bar.pack(side="bottom", fill="x")
+        self.notice = label(status_bar, "", anchor="w", padx=12)
+        self.notice.pack(side="left")
+        self.notice_timer = None
+        self.status = label(status_bar, "", anchor="e", padx=14)
+        self.status.pack(side="right", ipady=3)
         bar = tk.Frame(root, bg=SIDE, height=32)
         bar.pack(fill="x")
         bar.pack_propagate(False)
@@ -440,6 +473,7 @@ class Viewer:
 
     def quit_editor(self):
         if self.can_leave():
+            remember_folder(self.folder)
             self.root.destroy()
 
     def deactivate(self):
@@ -570,31 +604,53 @@ class Viewer:
         for node in expanded:
             if self.files.exists(node) and self.files.tag_has("directory", node):
                 self.set_branch(node, True)
+        return True
+
+    def refresh_feedback(self, message):
+        if self.notice_timer:
+            self.root.after_cancel(self.notice_timer)
+        shades = iter(("#9cdcfe", "#acc7d5", "#a0a8ad", "#858585"))
+        def fade():
+            color = next(shades, None)
+            self.notice.config(text=message if color else "", fg=color or DIM)
+            self.notice_timer = self.root.after(450, fade) if color else None
+        fade()
 
     def refresh_workspace(self, event=None):
         selected = self.files.focus()
         tree_top = self.files.yview()[0]
         expanded = self.folder_expanded
         focus = self.root.focus_get()
-        self.browse(self.folder)
+        if not self.browse(self.folder):
+            self.refresh_feedback("Folder refresh failed")
+            return "break"
+        message = "Folder refreshed"
         if not expanded:
             self.set_folder_expanded(False)
 
         if self.path:
             dirty = self.editable and self.code.get("1.0", "end-1c") != self.original
             if dirty:
-                self.status.config(text="Folder refreshed · Unsaved edits kept")
+                message = "Folder refreshed · Unsaved edits kept"
             elif not self.path.is_file():
                 self.close_file()
+                message = "Folder refreshed · File removed from disk"
             else:
                 cursor = self.code.index("insert")
                 top = self.code.index("@0,0").split(".")[0] + ".0"
                 left = self.code.xview()[0]
-                self.show(self.path, reload=True)
+                previous = getattr(self, "saved_bytes", None)
+                if not self.show(self.path, reload=True):
+                    message = "Folder refreshed · File reload failed"
+                elif getattr(self, "saved_bytes", None) != previous:
+                    message = "Refreshed · File updated from disk"
+                else:
+                    message = "Folder and file refreshed"
                 self.code.mark_set("insert", cursor)
                 self.code.yview(top)
                 self.code.xview_moveto(left)
 
+        self.refresh_feedback(message)
         if selected and self.files.exists(selected):
             self.files.focus(selected)
             self.files.selection_set(selected)
@@ -712,6 +768,7 @@ class Viewer:
         self.image_panel.image=preview
         self.image_panel.pack(fill="both",expand=True)
         self.status.config(text=path.name)
+        return True
 
     def show(self, path, *, reload=False):
         if self.path == path and self.editable and not reload:
@@ -723,8 +780,7 @@ class Viewer:
                 self.files.focus(str(self.path))
             return
         if path.suffix.lower() in (".ico", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff"):
-            self.show_image(path)
-            return
+            return self.show_image(path)
         try:
             with path.open("rb") as stream:
                 data = stream.read(LIMIT + 1)
@@ -754,7 +810,7 @@ class Viewer:
             self.body.pack(fill="both", expand=True)
             self.status.config(text=self.document_status)
             self.code.focus_set()
-            return
+            return True
         self.deactivate()
         crlf = source.count("\r\n")
         newline_types = [ending for ending, count in [("\r\n", crlf), ("\n", source.count("\n") - crlf),
@@ -787,6 +843,7 @@ class Viewer:
         self.code.yview_moveto(0)
         self.code.xview_moveto(0)
         self.code.focus_set()
+        return True
 
     def highlight(self, path, source):
         for tag in [str(token) for token, _ in COLORS] + ["declaration", "call"]:
@@ -847,7 +904,7 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.iconbitmap(default=str(Path(__file__).with_name("mervive-code-sharp.ico")))
     app = Viewer(root)
-    path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.home()
+    path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else startup_folder()
     app.browse(path if path.is_dir() else path.parent)
     if path.is_file():
         app.show(path)

@@ -46,7 +46,7 @@ The final dot opens this repository. Replace it with a quoted path to open anoth
 ## A typical edit with your AI app
 
 1. Open the same project folder you use in VS Code (or the agent’s worktree) in Mervive. Give Codex or Claude Code access to that folder and ask for a small change.
-2. Press **F5** anywhere in Mervive to refresh the folder tree and reload the open file from disk. Expanded folders stay open. If you have unsaved edits, F5 refreshes the tree and keeps your draft.
+2. Press **F5** anywhere in Mervive to refresh the folder tree and reload the open file from disk. Expanded folders stay open. If you have unsaved edits, F5 refreshes the tree and keeps your draft. A brief status message confirms the refresh. Launch Mervive without a file or folder argument to reopen the last folder you closed.
 3. Use **Ctrl+F** to find the relevant code, make your edit, and save with **Ctrl+S**. **Ctrl+Z** undoes an edit. **Ctrl+Y** or **Ctrl+Shift+Z** redoes it.
 4. Ask the agent to review the saved change or run the project's tests. If another app writes to the file while you have unsaved edits, Mervive warns you before overwriting it.
 
