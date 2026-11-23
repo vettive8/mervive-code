@@ -1,4 +1,5 @@
 from pathlib import Path
+from explanation_board import ExplanationBoard
 from pdf_preview import PdfPreview
 from explorer_drop import transfer_dropped_items
 from concurrent.futures import ThreadPoolExecutor
@@ -234,7 +235,7 @@ class Viewer:
             ("File", [("Open File…", self.choose_file), ("Open Folder…", self.choose_folder), ("Save", self.save), ("Close File", self.close_file)]),
             ("Edit", [("Undo", lambda: self.history("undo")), ("Redo", lambda: self.history("redo")), ("Cut", lambda: self.code.event_generate("<<Cut>>")), ("Paste", lambda: self.code.event_generate("<<Paste>>")), ("Copy", lambda: self.code.event_generate("<<Copy>>")), ("Find…", self.open_find)]),
             ("Selection", [("Select All", lambda: self.code.tag_add("sel","1.0","end-1c"))]),
-            ("View", [("Toggle Explorer", self.toggle_sidebar)]),
+            ("View", [("Toggle Explorer", self.toggle_sidebar), ("Explanation board", self.open_board)]),
             ("Go", [("Parent Folder", lambda: self.browse(self.folder.parent))])]:
             mb = tk.Menubutton(bar,text=title,bg=SIDE,fg=FG,activebackground="#343434",activeforeground="white",
                                relief="flat",bd=0,padx=9)
@@ -506,6 +507,15 @@ class Viewer:
             self.pane.add(self.sidebar,before=self.work,width=374)
 
         self.refresh_activity()
+
+    def open_board(self):
+        board = getattr(self, "explanation_board", None)
+        if board and board.window.winfo_exists():
+            if board.folder == self.folder.resolve():
+                board.window.lift()
+                return
+            board.close()
+        self.explanation_board = ExplanationBoard(self)
 
     def open_find(self):
         if self.path and self.body.winfo_manager():
@@ -1218,6 +1228,16 @@ class Viewer:
         return True
 
     def show(self, path, *, reload=False, focus_editor=True):
+        if path.suffix.lower() in (".mp3", ".mp4", ".wav"):
+            try:
+                os.startfile(path, "open")
+            except OSError as exc:
+                detail = ("Choose a default player for this file type in Windows Settings."
+                          if exc.winerror == 1155 else str(exc))
+                messagebox.showerror("Open media", detail, parent=self.root)
+                return False
+            self.refresh_feedback(f"Opened {path.name} in the default app")
+            return True
         if self.path == path and self.editable and not reload:
             if focus_editor:
                 self.code.focus_set()
@@ -1370,4 +1390,6 @@ if __name__ == "__main__":
     app.browse(path if path.is_dir() else path.parent)
     if path.is_file():
         app.show(path)
+    if "--board" in sys.argv[2:]:
+        root.after_idle(app.open_board)
     root.mainloop()

@@ -30,7 +30,7 @@ The final dot opens this repository. Replace it with a quoted path to open anoth
 3. Use **Ctrl+F** to find the relevant code, make your edit, and save with **Ctrl+S**. **Ctrl+Z** undoes an edit. **Ctrl+Y** or **Ctrl+Shift+Z** redoes it.
 4. Ask the agent to review the saved change or run the project's tests. If another app writes to the file while you have unsaved edits, Mervive warns you before overwriting it.
 
-Scroll continuously through PDFs in the editor. The scrollbar spans the whole document, and Mervive renders pages near your reading position. TXT and Markdown open in the text editor.
+Scroll continuously through PDFs in the editor. The scrollbar spans the whole document, and Mervive renders pages near your reading position. TXT and Markdown open in the text editor. Select an MP3, WAV, or MP4 to open it in your default Windows player while you keep editing.
 
 Mervive opens text files up to 1 MiB for editing when their encoding and line endings support a safe round trip. Larger files open as previews. The folder tree expands in place, so you can inspect a nested file and keep the rest of the project in view.
 
