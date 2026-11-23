@@ -28,6 +28,8 @@ PDF RAM is the mean of one private resident-page sample per second, averaged acr
 
 ## Repeat at the next milestone
 
+Run feature tests for routine changes. Repeat the Mervive benchmarks when shipped source roughly doubles from a milestone, or when a performance check is requested. After the roughly 1,600-line milestone, the next checkpoint is about 3,200 lines. Use the recorded VS Code and Antigravity runs for comparison.
+
 Build the Windows launcher and run these commands at the repository root. Run one editor under test at a time. The text script runs Mervive twice and prints its results directory. Each PDF invocation runs once and prints JSON. Record the application commit, line count and both sets of results.
 
 ```powershell
