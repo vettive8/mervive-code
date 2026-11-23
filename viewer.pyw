@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 import ctypes
+from ctypes import wintypes
 import math
 import codecs
 import os
@@ -43,6 +44,88 @@ def activity_icon(name):
     return im.resize((24, 24), Image.Resampling.LANCZOS)
 
 
+def configure_window_frame(root):
+    """Keep the native frame, but move this window without starting Aero Shake."""
+    user = ctypes.windll.user32
+    hwnd = user.GetParent(root.winfo_id())
+    enabled = wintypes.BOOL(1)
+    for attribute in (20, 3):  # Immersive dark caption, disable DWM transition bitmaps
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attribute, ctypes.byref(enabled), 4)
+
+    repaint_job = None
+
+    def repaint():
+        nonlocal repaint_job
+        repaint_job = None
+        user.RedrawWindow(hwnd, None, None, 0x0181)  # invalidate and paint all children
+
+    def request_repaint(event):
+        nonlocal repaint_job
+        if event.widget is root and repaint_job is None:
+            repaint_job = root.after_idle(repaint)
+
+    root.bind("<Map>", request_repaint, add="+")
+    root.bind("<Configure>", request_repaint, add="+")
+
+    controls = ctypes.windll.comctl32
+    word, signed = ctypes.c_size_t, ctypes.c_ssize_t
+    callback = ctypes.WINFUNCTYPE(signed, wintypes.HWND, wintypes.UINT, word, signed, word, word)
+    controls.DefSubclassProc.argtypes = [wintypes.HWND, wintypes.UINT, word, signed]
+    controls.DefSubclassProc.restype = signed
+    controls.SetWindowSubclass.argtypes = [wintypes.HWND, callback, word, word]
+    controls.RemoveWindowSubclass.argtypes = [wintypes.HWND, callback, word]
+    drag = None
+    brush = ctypes.windll.gdi32.CreateSolidBrush(0x1f1f1f)
+
+    @callback
+    def caption_proc(window, message, key, data, ident, reference):
+        nonlocal drag
+        if message == 0x00A1 and key == 2:  # WM_NCLBUTTONDOWN on HTCAPTION
+            rect = wintypes.RECT()
+            user.GetWindowRect(window, ctypes.byref(rect))
+            point = wintypes.POINT()
+            user.GetCursorPos(ctypes.byref(point))
+            drag = (point.x - rect.left, point.y - rect.top, rect.right - rect.left,
+                    point.x, point.y)
+            user.SetCapture(window)
+            return 0
+        if drag is not None and message == 0x0200:  # WM_MOUSEMOVE
+            dx, dy, width, start_x, start_y = drag
+            point = wintypes.POINT()
+            user.GetCursorPos(ctypes.byref(point))
+            if user.IsZoomed(window):
+                if abs(point.x - start_x) + abs(point.y - start_y) < 5:
+                    return 0
+                user.ShowWindow(window, 9)  # SW_RESTORE
+                rect = wintypes.RECT()
+                user.GetWindowRect(window, ctypes.byref(rect))
+                dx = int(dx * (rect.right - rect.left) / max(1, width))
+                drag = (dx, dy, width, start_x, start_y)
+            user.SetWindowPos(window, 0, point.x - dx, point.y - dy, 0, 0, 0x15)
+            return 0
+        if drag is not None and message in (0x0202, 0x001F, 0x0215):
+            drag = None  # button released, cancel mode, or capture lost
+            if user.GetCapture() == window:
+                user.ReleaseCapture()
+        if message == 0x0014 and brush:  # WM_ERASEBKGND: exposed frame behind Tk widgets
+            rect = wintypes.RECT()
+            user.GetClientRect(window, ctypes.byref(rect))
+            user.FillRect(key, ctypes.byref(rect), brush)
+            return 1
+        if message == 0x0005 and key != 1:  # WM_SIZE, restored or maximized
+            result = controls.DefSubclassProc(window, message, key, data)
+            user.RedrawWindow(window, None, None, 0x0185)
+            return result
+        if message == 0x0082:  # WM_NCDESTROY
+            ctypes.windll.gdi32.DeleteObject(brush)
+            controls.RemoveWindowSubclass(window, caption_proc, ident)
+        return controls.DefSubclassProc(window, message, key, data)
+
+    if not controls.SetWindowSubclass(hwnd, caption_proc, 1, 0):
+        raise ctypes.WinError()
+    return caption_proc  # keep the native callback alive for the window lifetime
+
+
 class Viewer:
     def __init__(self, root):
         self.root = root
@@ -59,11 +142,7 @@ class Viewer:
         root.option_add("*Font", self.ui)
         root.state("zoomed")
         root.update_idletasks()
-        # Keep the caption and sizing frame together so Windows handles snap,
-        # cross-monitor dragging, and the minimize/restore transition.
-        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
-        dark = ctypes.c_int(1)
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(dark), ctypes.sizeof(dark))
+        self.window_frame = configure_window_frame(root)
 
         def label(parent, text, command=None, **opts):
             widget = tk.Label(parent, text=text, bg=opts.pop("bg", SIDE), fg=opts.pop("fg", FG),
@@ -760,7 +839,10 @@ class Viewer:
 
 
 if __name__ == "__main__":
-    ctypes.windll.user32.SetProcessDPIAware()
+    try:
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+    except AttributeError:
+        ctypes.windll.user32.SetProcessDPIAware()
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Mervive.Code.Viewer")
     root = tk.Tk()
     root.iconbitmap(default=str(Path(__file__).with_name("mervive-code-sharp.ico")))
