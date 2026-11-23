@@ -322,6 +322,8 @@ class Viewer:
         self.files.bind("<ButtonPress-1>", self.start_reorder)
         self.files.bind("<B1-Motion>", self.drag_reorder)
         self.files.bind("<ButtonRelease-1>", self.finish_reorder)
+        self.files.bind("<Delete>", self.delete_selected)
+        self.files.bind("<Button-3>", self.explorer_menu)
         self.files.bind("<Return>",self.open_selected)
         self.files.bind("<Double-Button-1>", lambda _: "break")
         self.files.bind("<Left>", self.tree_arrow)
@@ -553,8 +555,10 @@ class Viewer:
         return True
 
     def close_file(self):
-        if not self.can_leave():
-            return
+        if self.can_leave():
+            self.clear_document()
+
+    def clear_document(self):
         self.deactivate()
         self.path=None
         self.image_panel.pack_forget()
@@ -845,6 +849,60 @@ class Viewer:
             row.paste(glyph, (46 - glyph.width // 2, 14 - glyph.height // 2))
         return ImageTk.PhotoImage(row)
 
+    def explorer_menu(self, event):
+        node = self.files.identify_row(event.y)
+        if not node:
+            return "break"
+        self.files.focus_set()
+        self.files.focus(node)
+        self.files.selection_set(node)
+        path = Path(node)
+        menu = tk.Menu(self.files, tearoff=False, bg=SIDE, fg=FG)
+        if self.files.tag_has("directory", node):
+            expanded = bool(self.files.item(node, "open"))
+            menu.add_command(label="Collapse" if expanded else "Expand",
+                             command=lambda: self.set_branch(node, not expanded))
+        else:
+            menu.add_command(label="Open", command=lambda: self.show(path))
+        def copy_path():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(str(path))
+        menu.add_command(label="Copy path", command=copy_path)
+        menu.add_separator()
+        menu.add_command(label="Delete", accelerator="Del", command=self.delete_selected)
+        # Post asynchronously so the menu survives until a command is chosen.
+        menu.bind("<Unmap>", lambda _: self.root.after_idle(menu.destroy))
+        menu.tk_popup(event.x_root, event.y_root)
+        return "break"
+
+    def delete_selected(self, event=None):
+        selected = self.files.selection()
+        if len(selected) != 1:
+            return "break"
+        path = Path(selected[0])
+        affects_document = self.path is not None and self.path.is_relative_to(path)
+        try:
+            if path == self.folder or not path.parent.resolve().is_relative_to(self.folder.resolve()):
+                raise ValueError("Select an item inside the project folder.")
+            if not os.path.lexists(path):
+                return self.refresh_workspace()
+            detail = " and its contents" if path.is_dir() and not path.is_symlink() else ""
+            if not messagebox.askyesno("Delete", f"Move {path.name}{detail} to the Recycle Bin?",
+                                       parent=self.root, default="no"):
+                return "break"
+            if affects_document and not self.can_leave():
+                return "break"
+            from send2trash import send2trash
+            send2trash(str(path))
+        except (OSError, ValueError, ImportError) as exc:
+            messagebox.showerror("Delete", str(exc), parent=self.root)
+            return "break"
+        if affects_document:
+            self.clear_document()
+        self.refresh_workspace()
+        self.files.focus_set()
+        return "break"
+
     def open_selected(self, event):
         node = self.files.identify_row(event.y) if event.type == tk.EventType.ButtonRelease else self.files.focus()
         if node and not Path(node).exists():
@@ -855,7 +913,7 @@ class Viewer:
             if self.files.tag_has("directory", node):
                 self.set_branch(node, not self.files.item(node, "open"))
             else:
-                self.show(Path(node))
+                self.show(Path(node), focus_editor=event.type != tk.EventType.ButtonRelease)
         return "break"
 
     def choose_file(self):
@@ -910,9 +968,10 @@ class Viewer:
         self.status.config(text=path.name)
         return True
 
-    def show(self, path, *, reload=False):
+    def show(self, path, *, reload=False, focus_editor=True):
         if self.path == path and self.editable and not reload:
-            self.code.focus_set()
+            if focus_editor:
+                self.code.focus_set()
             return
         if not self.can_leave():
             if self.path and self.files.exists(str(self.path)):
@@ -949,7 +1008,8 @@ class Viewer:
             self.image_panel.pack_forget()
             self.body.pack(fill="both", expand=True)
             self.status.config(text=self.document_status)
-            self.code.focus_set()
+            if focus_editor:
+                self.code.focus_set()
             return True
         self.deactivate()
         crlf = source.count("\r\n")
@@ -982,7 +1042,8 @@ class Viewer:
         self.status.config(text=self.document_status)
         self.code.yview_moveto(0)
         self.code.xview_moveto(0)
-        self.code.focus_set()
+        if focus_editor:
+            self.code.focus_set()
         return True
 
     def highlight(self, path, source):
