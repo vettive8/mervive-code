@@ -1,34 +1,12 @@
 # Mervive Code
 
-Mervive Code is a lightweight Windows editor for people who write code with the Codex desktop app or Claude Code in Claude Desktop. Keep the conversation in your AI app. Open the same project folder in Mervive to read the implementation, find a line, or make an edit yourself.
+Mervive Code is a lightweight Windows editor for context engineering with Codex or Claude Desktop. Open a project folder, edit Markdown outlines and TXT transcripts, read PDF references, and keep source code beside them. Your AI app and VS Code can work with the same files on disk.
 
-## Windows editor benchmark
+For example, keep a lesson outline, transcript and PDF worksheet together. Arrange them in reading order, ask your AI app to update the outline, then press **F5** to read the changes. The PDF reader loads nearby pages as you scroll.
 
-| Editor | Launch to filename in title | Private RAM | CPU after launch | Processes |
-| --- | ---: | ---: | ---: | ---: |
-| Mervive Code | 2.8 s | 31.2 MiB | 0.03% | 1 |
-| VS Code 1.141.0 | 7.7 s | 940.4 MiB | 22.73% | 11–18 |
-| Antigravity IDE 2.8.0 | 13.5 s | 852.6 MiB | 6.83% | 9 |
+**Drag to move · Ctrl + drop to copy.** Drag a file or folder from Windows File Explorer onto a folder in Mervive. Hold **Ctrl while dropping** to keep the original. Dropping onto a file uses its containing folder. Existing names are skipped.
 
-**How we measured.** Each editor opened the same 36 KiB Python file on a Windows 10 laptop with an Intel Core i7-7700HQ (8 logical processors) and 7.9 GiB of usable RAM. We ran one editor under test at a time, twice per editor, reversing the order for the second round. The table shows the two-run means and the observed process counts.
-
-Launch time ends when the window title first contains the filename. After an eight-second settling period, we sampled the editor and its child processes over a ten-second idle interval. RAM is the average private working set at the two endpoints. CPU is the share of total machine capacity used by processes present at both endpoints.
-
-VS Code and Antigravity used separate benchmark profiles with user extensions disabled. Each reused its profile on the second launch. An existing Antigravity session stayed open throughout. Each measurement counts only the editor process tree launched for that test. Running a separate AI desktop app adds its own resource usage. Startup activity can continue during the idle interval, and results vary with project size and extensions.
-
-<details>
-<summary>Individual runs</summary>
-
-| Run | Editor | Launch | Private RAM | CPU after launch |
-| ---: | --- | ---: | ---: | ---: |
-| 1 | Mervive Code | 3.6 s | 31.4 MiB | 0.05% |
-| 1 | VS Code | 11.2 s | 976.0 MiB | 20.93% |
-| 1 | Antigravity IDE | 19.0 s | 770.9 MiB | 4.46% |
-| 2 | Antigravity IDE | 8.0 s | 934.4 MiB | 9.20% |
-| 2 | VS Code | 4.3 s | 904.8 MiB | 24.53% |
-| 2 | Mervive Code | 1.9 s | 31.1 MiB | 0.00% |
-
-</details>
+[Resources · v1 source lines, RAM, CPU and editor benchmarks](RESOURCES.md)
 
 ## Try it on Windows
 
@@ -53,8 +31,6 @@ The final dot opens this repository. Replace it with a quoted path to open anoth
 Scroll continuously through PDFs in the editor. The scrollbar spans the whole document, and Mervive renders pages near your reading position. TXT and Markdown open in the text editor.
 
 Mervive opens text files up to 1 MiB for editing when their encoding and line endings support a safe round trip. Larger files open as previews. The folder tree expands in place, so you can inspect a nested file and keep the rest of the project in view.
-
-Drag files or folders from Windows File Explorer onto a project folder to move them into it. Hold **Ctrl** while dropping to copy instead. Dropping onto a file uses its containing folder. Existing names are skipped.
 
 Click an Explorer row and press **Delete** to move the selected file or folder to the Windows Recycle Bin. Right-click a row to open or expand it, copy its path, or delete it.
 
