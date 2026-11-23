@@ -328,8 +328,15 @@ class Viewer:
         self.drag_rows = ()
         self.ctrl_click = False
         self.drop_highlight = None
-        self.drag_badge = tk.Label(root, bg="#17394e", fg="#e5f3ff", padx=8, pady=2,
+        # Windows composites this popup independently as it crosses the tree and editor.
+        self.drag_popup = tk.Toplevel(root, takefocus=False)
+        self.drag_popup.withdraw()
+        self.drag_popup.overrideredirect(True)
+        self.drag_popup.transient(root)
+        self.drag_popup.attributes("-disabled", True)
+        self.drag_badge = tk.Label(self.drag_popup, bg="#17394e", fg="#e5f3ff", padx=8, pady=2,
                                    highlightthickness=1, highlightbackground=BLUE, bd=0)
+        self.drag_badge.pack()
         self.files.tag_configure("drop-destination", background="#18455d", foreground="white")
         self.drop_line = tk.Frame(self.files, height=2, bg=BLUE)
         self.files.bind("<ButtonPress-1>", self.start_reorder)
@@ -704,7 +711,7 @@ class Viewer:
         self.drag_rows = ()
         self.drag_active = False
         self.drop_line.place_forget()
-        self.drag_badge.place_forget()
+        self.drag_popup.withdraw()
         self.mark_destination(None)
         if event:
             self.notice.config(text="")
@@ -771,11 +778,12 @@ class Viewer:
         name = Path(self.drag_rows[0]).name
         caption = (name if len(name) <= 32 else name[:29] + "…") if count == 1 else f"{count} items"
         prefix = "Copy" if destination and action == COPY else "Move" if destination else "Reorder" if target else "Dragging"
-        self.drag_badge.configure(text=f"{prefix} · {caption}")
-        bx = min(event.x_root - self.root.winfo_rootx() + 14, self.root.winfo_width() - self.drag_badge.winfo_reqwidth())
-        by = min(event.y_root - self.root.winfo_rooty() + 18, self.root.winfo_height() - self.drag_badge.winfo_reqheight())
-        self.drag_badge.place(x=max(0, bx), y=max(0, by))
-        self.drag_badge.lift()
+        badge_text = f"{prefix} · {caption}"
+        if self.drag_badge.cget("text") != badge_text:
+            self.drag_badge.configure(text=badge_text)
+        self.drag_popup.geometry(f"+{event.x_root + 14}+{event.y_root + 18}")
+        if not self.drag_popup.winfo_ismapped():
+            self.drag_popup.deiconify()
         self.mark_destination(destination)
         if target:
             self.drop_line.place(x=0, y=target[2]-1, relwidth=1)
