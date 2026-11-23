@@ -67,9 +67,25 @@ class Viewer:
         user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 0x37)  # apply frame change
         def maximize():
             root.state("normal" if root.state() == "zoomed" else "zoomed")
+        drag_origin = None
+
+        def arm_drag(event):
+            nonlocal drag_origin
+            drag_origin = (event.x_root, event.y_root)
+
         def move_window(event):
+            nonlocal drag_origin
+            if drag_origin is None:
+                return
+            x, y = drag_origin
+            if abs(event.x_root - x) < 4 and abs(event.y_root - y) < 4:
+                return
+            drag_origin = None
+            # Return to Tk before Windows enters its modal move loop.
+            # SendMessage here can re-enter Tk inside the Python motion callback.
             user32.ReleaseCapture()
-            user32.SendMessageW(hwnd, 0x00A1, 2, 0)  # native caption drag
+            position = (event.x_root & 0xffff) | ((event.y_root & 0xffff) << 16)
+            user32.PostMessageW(hwnd, 0x00A1, 2, position)  # WM_NCLBUTTONDOWN, HTCAPTION
         def label(parent, text, command=None, **opts):
             widget = tk.Label(parent, text=text, bg=opts.pop("bg", SIDE), fg=opts.pop("fg", FG),
                               font=opts.pop("font", self.ui), bd=0, **opts)
@@ -94,6 +110,7 @@ class Viewer:
         self.caption = label(bar, "", anchor="center")
         self.caption.place(relx=.5, rely=.5, anchor="center")
         for surface in (bar, self.caption):
+            surface.bind("<ButtonPress-1>", arm_drag)
             surface.bind("<Double-Button-1>", lambda _: maximize())
             surface.bind("<B1-Motion>", move_window)
 
