@@ -1,0 +1,4 @@
+/Mervive Code.exe
+__pycache__/
+*.py[cod]
+.venv/
