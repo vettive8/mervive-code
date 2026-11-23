@@ -37,7 +37,7 @@ With 64-bit Python 3.12 and Tkinter installed, run these commands in PowerShell:
 ```powershell
 git clone https://github.com/vettive8/mervive-code.git
 cd mervive-code
-python -m pip install Pillow Pygments "Send2Trash[nativeLib]"
+python -m pip install Pillow Pygments pypdfium2 "Send2Trash[nativeLib]"
 python viewer.pyw .
 ```
 
@@ -49,6 +49,8 @@ The final dot opens this repository. Replace it with a quoted path to open anoth
 2. Press **F5** anywhere in Mervive to refresh the folder tree and reload the open file from disk. Expanded folders stay open. If you have unsaved edits, F5 refreshes the tree and keeps your draft. A brief status message confirms the refresh. Launch Mervive without a file or folder argument to reopen the last folder you closed.
 3. Use **Ctrl+F** to find the relevant code, make your edit, and save with **Ctrl+S**. **Ctrl+Z** undoes an edit. **Ctrl+Y** or **Ctrl+Shift+Z** redoes it.
 4. Ask the agent to review the saved change or run the project's tests. If another app writes to the file while you have unsaved edits, Mervive warns you before overwriting it.
+
+Open PDFs in the editor and use **Previous** and **Next** to change pages. TXT and Markdown open in the text editor.
 
 Mervive opens text files up to 1 MiB for editing when their encoding and line endings support a safe round trip. Larger files open as previews. The folder tree expands in place, so you can inspect a nested file and keep the rest of the project in view.
 

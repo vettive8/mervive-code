@@ -1,4 +1,5 @@
 from pathlib import Path
+from pdf_preview import PdfPreview
 import explorer_order
 import sys
 import ctypes
@@ -305,7 +306,7 @@ class Viewer:
         self.file_icons = {}
         self.tab_icons = {}
         with Image.open(Path(__file__).with_name("explorer-icons.png")) as atlas:
-            for index, suffix in enumerate((".json", ".md", ".js", ".png", ".py", ".exe", "folder", "file", ".ps1", ".c")):
+            for index, suffix in enumerate((".json", ".md", ".js", ".png", ".py", ".exe", "folder", "file", ".ps1", ".c", ".pdf", ".txt")):
                 icon = atlas.crop((20 * index, 0, 20 * index + 20, 20))
                 self.tab_icons[suffix] = ImageTk.PhotoImage(icon)
                 self.file_icons[suffix] = self.explorer_image(icon)
@@ -342,6 +343,7 @@ class Viewer:
         self.tabname.pack(side="left")
         label(self.tabframe,"×",self.close_file,bg=BG,padx=12).pack(side="left")
         self.crumb=label(self.work,"",bg=BG,anchor="w",compound="left",padx=20)
+        self.pdf = PdfPreview(self.work, BG, FG)
         self.image_panel=tk.Label(self.work,bg=BG,bd=0)
         self.findbar=tk.Frame(self.work,bg=SIDE)
         self.query=tk.Entry(self.findbar,bg="#313131",fg=FG,insertbackground=FG,relief="flat")
@@ -519,7 +521,9 @@ class Viewer:
             remember_folder(self.folder)
             self.root.destroy()
 
-    def deactivate(self):
+    def deactivate(self, keep_pdf=False):
+        if not keep_pdf:
+            self.pdf.hide()
         self.editable = False
         if self.render_job:
             self.root.after_cancel(self.render_job)
@@ -978,6 +982,18 @@ class Viewer:
                 self.files.selection_set(str(self.path))
                 self.files.focus(str(self.path))
             return
+        if path.suffix.lower() == ".pdf":
+            index = self.pdf.index if self.pdf.path == path else 0
+            if not self.pdf.display(path, index):
+                return False
+            self.deactivate(keep_pdf=True)
+            self.display_header(path)
+            self.body.pack_forget()
+            self.findbar.pack_forget()
+            self.image_panel.pack_forget()
+            self.pdf.pack(fill="both", expand=True)
+            self.status.config(text="PDF")
+            return True
         if path.suffix.lower() in (".ico", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff"):
             return self.show_image(path)
         try:
