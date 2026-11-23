@@ -59,7 +59,7 @@ def transfer_dropped_items(project, folder, sources, action):
                 raise ValueError("A folder cannot be dropped inside itself")
             if action == "move":
                 move_item(source, target)
-                transferred.append(target)
+                transferred.append((source, target))
                 continue
             with TemporaryDirectory(prefix=".mervive-copy-", dir=folder) as temporary:
                 staged = Path(temporary) / source.name
@@ -69,7 +69,7 @@ def transfer_dropped_items(project, folder, sources, action):
                     shutil.copy2(source, staged)
                 # Windows rename fails if another process created the target during the copy.
                 staged.rename(target)
-            transferred.append(target)
+            transferred.append((source, target))
         except (OSError, ValueError, RuntimeError) as exc:
             skipped.append(f"{source.name}: {exc}")
     return transferred, skipped

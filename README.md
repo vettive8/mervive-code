@@ -4,6 +4,8 @@ Mervive Code is a lightweight Windows editor for context engineering with Codex 
 
 For example, keep a lesson outline, transcript and PDF worksheet together. Arrange them in reading order, ask your AI app to update the outline, then press **F5** to read the changes. The PDF reader loads nearby pages as you scroll.
 
+**Ctrl-click multiple rows to select them.** Release Ctrl and drag any selected row to move the group. The label beside the pointer shows the item count and the destination folder highlights.
+
 **Drag to move · Ctrl + drop to copy.** Drag a file or folder onto the middle of a destination folder in Mervive, either from its own Explorer or from Windows File Explorer. Drop on the project heading to move an item back to the root. Hold **Ctrl while dropping** to keep the original. Dropping onto a file uses its containing folder. Existing names are skipped.
 
 [Resources · v1 source lines, RAM, CPU and editor benchmarks](RESOURCES.md)

@@ -307,7 +307,7 @@ class Viewer:
         self.folder_label.pack(fill="x", ipady=1)
         self.folder_label.bind("<Left>", lambda _: self.set_folder_expanded(False))
         self.folder_label.bind("<Right>", lambda _: self.set_folder_expanded(True))
-        self.files = ttk.Treeview(self.sidebar, show="tree", selectmode="browse", style="Explorer.Treeview")
+        self.files = ttk.Treeview(self.sidebar, show="tree", selectmode="extended", style="Explorer.Treeview")
         self.files.column("#0", stretch=True, minwidth=60)
         self.file_icons = {}
         self.tab_icons = {}
@@ -325,6 +325,12 @@ class Viewer:
         self.files.pack(fill="both",expand=True)
         self.drag_start = None
         self.drag_active = False
+        self.drag_rows = ()
+        self.ctrl_click = False
+        self.drop_highlight = None
+        self.drag_badge = tk.Label(root, bg="#17394e", fg="#e5f3ff", padx=8, pady=2,
+                                   highlightthickness=1, highlightbackground=BLUE, bd=0)
+        self.files.tag_configure("drop-destination", background="#18455d", foreground="white")
         self.drop_line = tk.Frame(self.files, height=2, bg=BLUE)
         self.files.bind("<ButtonPress-1>", self.start_reorder)
         self.files.bind("<B1-Motion>", self.drag_reorder)
@@ -332,7 +338,8 @@ class Viewer:
         self.files.bind("<Delete>", self.delete_selected)
         self.files.bind("<Button-3>", self.explorer_menu)
         self.files.bind("<Return>",self.open_selected)
-        self.files.bind("<Double-Button-1>", lambda _: "break")
+        self.files.bind("<Double-Button-1>", self.start_reorder)
+        self.files.bind("<Escape>", self.cancel_drag)
         self.files.bind("<Left>", self.tree_arrow)
         self.files.bind("<Right>", self.tree_arrow)
         self.transfer_job = None
@@ -660,10 +667,50 @@ class Viewer:
     def start_reorder(self, event):
         self.drag_active = False
         row = self.files.identify_row(event.y)
-        self.drag_start = (row, event.x, event.y) if row and not self.transfer_job else None
+        self.drag_start = None
+        self.ctrl_click = bool(event.state & 0x4)
+        if not row:
+            self.files.selection_set(())
+            return "break"
+        self.files.focus_set()
+        self.files.focus(row)
+        selected = self.files.selection()
+        self.toggle_off = self.ctrl_click and row in selected
+        if row not in selected:
+            if self.ctrl_click:
+                self.files.selection_add(row)
+            else:
+                self.files.selection_set(row)
+        if not self.transfer_job:
+            self.drag_start = (row, event.x, event.y)
+        return "break"
+
+    def mark_destination(self, destination):
+        if destination == self.drop_highlight:
+            return
+        for path, active in ((self.drop_highlight, False), (destination, True)):
+            if path == self.folder:
+                self.folder_label.config(bg="#18455d" if active else SIDE)
+            elif path and self.files.exists(str(path)):
+                tags = list(self.files.item(str(path), "tags"))
+                tags = [tag for tag in tags if tag != "drop-destination"]
+                if active:
+                    tags.append("drop-destination")
+                self.files.item(str(path), tags=tags)
+        self.drop_highlight = destination
+
+    def cancel_drag(self, event=None):
+        self.drag_start = None
+        self.drag_rows = ()
+        self.drag_active = False
+        self.drop_line.place_forget()
+        self.drag_badge.place_forget()
+        self.mark_destination(None)
+        if event:
+            self.notice.config(text="")
+        return "break"
 
     def internal_destination(self, event):
-        source = Path(self.drag_start[0])
         widget = self.root.winfo_containing(event.x_root, event.y_root)
         if widget == self.folder_label:
             destination = self.folder
@@ -674,7 +721,8 @@ class Viewer:
                 destination = self.folder
             elif self.files.tag_has("directory", row):
                 _, y, _, height = self.files.bbox(row)
-                if (self.order_view.get() == "Order" and Path(row).parent == source.parent
+                if (self.order_view.get() == "Order"
+                        and all(Path(item).parent == Path(row).parent for item in self.drag_rows)
                         and not y + height / 4 <= event.y < y + 3 * height / 4):
                     return None  # Upper and lower edges reorder siblings.
                 destination = Path(row)
@@ -682,18 +730,19 @@ class Viewer:
                 destination = Path(row).parent
         else:
             return None
-        if destination == source.parent or destination.is_relative_to(source):
+        if all(Path(row).parent == destination for row in self.drag_rows) or any(
+                destination.is_relative_to(Path(row)) for row in self.drag_rows):
             return None
         return destination
 
     def drop_target(self, event):
         if self.order_view.get() != "Order":
             return None
-        source = self.drag_start[0]
+        source = self.drag_rows[0]
         target = self.files.identify_row(event.y)
-        if (not target or source == target or not self.files.exists(source)
+        if (not target or target in self.drag_rows or not self.files.exists(source)
                 or not 0 <= event.x < self.files.winfo_width()
-                or self.files.parent(source) != self.files.parent(target)):
+                or any(self.files.parent(row) != self.files.parent(target) for row in self.drag_rows)):
             return None
         x, y, width, height = self.files.bbox(target)
         after = event.y >= y + height / 2
@@ -705,6 +754,12 @@ class Viewer:
         _, x, y = self.drag_start
         if not self.drag_active and max(abs(event.x - x), abs(event.y - y)) < 5:
             return
+        if not self.drag_active:
+            selected = set(self.files.selection())
+            self.drag_rows = tuple(row for row in self.files.selection()
+                                   if not any(str(parent) in selected for parent in Path(row).parents))
+            if not self.drag_rows:
+                return "break"
         self.drag_active = True
         if event.y < 15 or event.y > self.files.winfo_height() - 15:
             self.files.yview_scroll(-1 if event.y < 15 else 1, "units")
@@ -712,6 +767,16 @@ class Viewer:
         action = COPY if event.state & 0x4 else MOVE
         self.notice.config(text=f"{action.capitalize()} to {destination.name}" if destination else "", fg=FG)
         target = None if destination else self.drop_target(event)
+        count = len(self.drag_rows)
+        name = Path(self.drag_rows[0]).name
+        caption = (name if len(name) <= 32 else name[:29] + "…") if count == 1 else f"{count} items"
+        prefix = "Copy" if destination and action == COPY else "Move" if destination else "Reorder" if target else "Dragging"
+        self.drag_badge.configure(text=f"{prefix} · {caption}")
+        bx = min(event.x_root - self.root.winfo_rootx() + 14, self.root.winfo_width() - self.drag_badge.winfo_reqwidth())
+        by = min(event.y_root - self.root.winfo_rooty() + 18, self.root.winfo_height() - self.drag_badge.winfo_reqheight())
+        self.drag_badge.place(x=max(0, bx), y=max(0, by))
+        self.drag_badge.lift()
+        self.mark_destination(destination)
         if target:
             self.drop_line.place(x=0, y=target[2]-1, relwidth=1)
         else:
@@ -720,31 +785,35 @@ class Viewer:
 
     def finish_reorder(self, event):
         try:
-            if not self.drag_active or not self.drag_start:
+            if not self.drag_start:
+                return "break"
+            if not self.drag_active:
+                if self.ctrl_click:
+                    if self.toggle_off:
+                        self.files.selection_remove(self.drag_start[0])
+                    return "break"
                 return self.open_selected(event)
             destination = self.internal_destination(event)
             if destination:
-                source = Path(self.drag_start[0])
-                self.start_transfer(destination, [source], COPY if event.state & 0x4 else MOVE, internal=True)
+                sources = [Path(row) for row in self.drag_rows]
+                self.start_transfer(destination, sources, COPY if event.state & 0x4 else MOVE, internal=True)
                 return "break"
             self.notice.config(text="")
             target = self.drop_target(event)
             if target:
-                source = self.drag_start[0]
+                source = self.drag_rows[0]
                 parent = self.files.parent(source)
                 siblings = list(self.files.get_children(parent))
-                siblings.remove(source)
+                siblings = [row for row in siblings if row not in self.drag_rows]
                 index = siblings.index(target[0]) + int(target[1])
-                siblings.insert(index, source)
+                siblings[index:index] = self.drag_rows
                 key = Path(source).parent.relative_to(self.folder).as_posix()
                 folders = {**self.order["folders"], key: [Path(node).name for node in siblings]}
                 if self.save_order(folders=folders):
-                    self.files.move(source, parent, index)
+                    self.files.set_children(parent, *siblings)
             return "break"
         finally:
-            self.drag_start = None
-            self.drag_active = False
-            self.drop_line.place_forget()
+            self.cancel_drag()
 
     def folder_items(self, path, root=None):
         root = root or self.folder
@@ -818,7 +887,8 @@ class Viewer:
         fade()
 
     def refresh_workspace(self, event=None):
-        selected = self.files.focus()
+        selected = self.files.selection()
+        focused = self.files.focus()
         tree_top = self.files.yview()[0]
         expanded = self.folder_expanded
         focus = self.root.focus_get()
@@ -852,9 +922,9 @@ class Viewer:
                 self.code.xview_moveto(left)
 
         self.refresh_feedback(message)
-        if selected and self.files.exists(selected):
-            self.files.focus(selected)
-            self.files.selection_set(selected)
+        self.files.selection_set([row for row in selected if self.files.exists(row)])
+        if focused and self.files.exists(focused):
+            self.files.focus(focused)
         self.files.yview_moveto(tree_top)
         if focus and focus.winfo_ismapped():
             focus.focus_set()
@@ -971,13 +1041,15 @@ class Viewer:
             transferred, skipped = job.result()
             if transferred and self.folder == project:
                 if internal:
-                    self.follow_internal_transfer(sources[0], transferred[0], action)
+                    for source, target in transferred:
+                        self.follow_internal_transfer(source, target, action)
                 self.refresh_workspace()
                 if folder != project and self.files.exists(str(folder)):
                     self.set_branch(str(folder), True)
-                row = str(transferred[0])
-                if self.files.exists(row):
-                    self.files.selection_set(row)
+                rows = [str(target) for _, target in transferred if self.files.exists(str(target))]
+                if rows:
+                    row = rows[0]
+                    self.files.selection_set(*rows)
                     self.files.focus(row)
                     self.files.see(row)
             self.refresh_feedback(f"{done} {len(transferred)} to {folder.name}")
